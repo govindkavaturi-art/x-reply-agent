@@ -33,7 +33,7 @@ DISCOVERY_CUE_TASK = "find-x-replies"
 COOLDOWN_CUE_TASK = "update-x-cooldown"
 
 # --- Anthropic ---
-DRAFTING_MODEL = "claude-sonnet-4-5-20250514"
+DRAFTING_MODEL = "claude-sonnet-4-5-20250929"
 
 # --- Brand accounts to exclude ---
 BRAND_EXCLUSIONS = {
@@ -44,10 +44,10 @@ BRAND_EXCLUSIONS = {
 
 # --- Search queries ---
 SEARCH_QUERIES = [
-    '"claude code" (help OR broke OR failed OR "how do" OR issue) -filter:replies -filter:retweets',
-    '"ai agent" (production OR staging OR "main branch" OR broke OR failed) -filter:replies',
-    'cursor (problem OR regression OR "how do you") -filter:replies -filter:retweets',
-    '"vibe coding" (broke OR failed OR production) -filter:replies',
+    '"claude code" (help OR broke OR failed OR "how do" OR issue) -is:reply -is:retweet',
+    '"ai agent" (production OR staging OR "main branch" OR broke OR failed) -is:reply -is:retweet',
+    'cursor (problem OR regression OR "how do you") -is:reply -is:retweet',
+    '"vibe coding" (broke OR failed OR production) -is:reply -is:retweet',
     'claude.md (ignored OR "didn\'t work" OR "doesn\'t follow")',
     '"agent" (forgot OR forgotten OR "lost context")',
     '"design system" (claude OR cursor) (drift OR inconsistent OR edge)',
