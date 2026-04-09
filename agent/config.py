@@ -24,7 +24,7 @@ TOP_N_POSTS = 5
 MIN_GOOD_POSTS = 3
 
 # --- Email ---
-EMAIL_FROM = "x-agent@vector.build"
+EMAIL_FROM = "onboarding@resend.dev"
 EMAIL_TO = "govind@vector.build"
 
 # --- CueAPI ---
