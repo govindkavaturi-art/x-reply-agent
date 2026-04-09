@@ -178,17 +178,11 @@ Govind writes replies that share his specific operator experience. He does NOT r
 - Posts asking for basic tutorials
 - Posts celebrating AI without a real claim
 
-Evaluate this post and return a JSON object.
+Evaluate the post provided by the user and return a JSON object.
 
-POST:
-Author: @{username} ({follower_count} followers, {account_age_days} days old)
-Posted: {age_hours} hours ago
-Replies: {reply_count}
-Text: "{post_text}"
+Return ONLY a raw JSON object with this exact structure. No markdown, no code fences, no explanation, just the JSON:
 
-Return ONLY a JSON object with this exact structure, no other text:
-
-{{"verdict": "PASS or REJECT", "reason": "one sentence explanation", "scores": {{"specific_problem": 0, "open_to_discussion": 0, "govind_has_experience": 0, "not_crowded_yet": 0, "reply_would_add_value": 0}}, "total": 0, "suggested_angle": "one sentence describing what Govind could reply with"}}
+{"verdict": "PASS", "reason": "one sentence", "scores": {"specific_problem": 0, "open_to_discussion": 0, "govind_has_experience": 0, "not_crowded_yet": 0, "reply_would_add_value": 0}, "total": 0, "suggested_angle": "one sentence"}
 
 Scoring rules:
 - specific_problem: Does the post describe a specific, concrete problem? Specific = high.
@@ -202,6 +196,14 @@ Verdict rules:
 - If any individual score is 0, verdict is REJECT.
 - If govind_has_experience < 4, verdict is REJECT regardless of total.
 - Otherwise verdict is PASS."""
+
+SCORING_USER_TEMPLATE = """POST:
+Author: @{username} ({follower_count} followers, {account_age_days} days old)
+Posted: {age_hours} hours ago
+Replies: {reply_count}
+Text: "{post_text}"
+
+Return ONLY the JSON object. No other text."""
 
 
 def draft_reply(username: str, post_text: str) -> str:
@@ -244,7 +246,7 @@ def score_post_relevance(post: dict, author_metadata: dict) -> dict:
     else:
         account_age_days = 0
 
-    prompt = SCORING_SYSTEM_PROMPT.format(
+    user_prompt = SCORING_USER_TEMPLATE.format(
         username=post.get("username", "unknown"),
         follower_count=post.get("follower_count", 0),
         account_age_days=account_age_days,
@@ -257,9 +259,15 @@ def score_post_relevance(post: dict, author_metadata: dict) -> dict:
         message = client.messages.create(
             model=SCORING_MODEL,
             max_tokens=500,
-            messages=[{"role": "user", "content": prompt}],
+            system=SCORING_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_prompt}],
         )
         raw = message.content[0].text.strip()
+        # Strip markdown code fences if present
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+            if raw.endswith("```"):
+                raw = raw[:-3].strip()
         result = json.loads(raw)
         return result
     except Exception as e:
