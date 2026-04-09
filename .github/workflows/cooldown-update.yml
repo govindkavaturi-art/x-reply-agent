@@ -20,7 +20,10 @@ jobs:
 
       - name: Run cooldown update
         env:
-          X_API_BEARER_TOKEN: ${{ secrets.X_API_BEARER_TOKEN }}
+          X_CONSUMER_KEY: ${{ secrets.X_CONSUMER_KEY }}
+          X_CONSUMER_SECRET: ${{ secrets.X_CONSUMER_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
           CUEAPI_API_KEY: ${{ secrets.CUEAPI_API_KEY }}
           GOVIND_X_USER_ID: ${{ secrets.GOVIND_X_USER_ID }}
         run: python -m agent.cooldown_update

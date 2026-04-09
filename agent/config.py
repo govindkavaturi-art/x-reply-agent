@@ -1,7 +1,10 @@
 import os
 
-# --- API keys (from environment / GitHub Actions secrets) ---
-X_API_BEARER_TOKEN = os.environ["X_API_BEARER_TOKEN"]
+# --- X API OAuth 1.0a credentials ---
+X_CONSUMER_KEY = os.environ["X_CONSUMER_KEY"]
+X_CONSUMER_SECRET = os.environ["X_CONSUMER_SECRET"]
+X_ACCESS_TOKEN = os.environ["X_ACCESS_TOKEN"]
+X_ACCESS_TOKEN_SECRET = os.environ["X_ACCESS_TOKEN_SECRET"]
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 RESEND_API_KEY = os.environ["RESEND_API_KEY"]
 CUEAPI_API_KEY = os.environ["CUEAPI_API_KEY"]

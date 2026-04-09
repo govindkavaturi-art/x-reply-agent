@@ -39,7 +39,10 @@ Add these secrets to the repo (Settings > Secrets and variables > Actions):
 
 | Secret | Description |
 |--------|-------------|
-| `X_API_BEARER_TOKEN` | X API v2 bearer token (Basic tier or higher) |
+| `X_CONSUMER_KEY` | X API OAuth 1.0a consumer key |
+| `X_CONSUMER_SECRET` | X API OAuth 1.0a consumer secret |
+| `X_ACCESS_TOKEN` | X API OAuth 1.0a access token |
+| `X_ACCESS_TOKEN_SECRET` | X API OAuth 1.0a access token secret |
 | `ANTHROPIC_API_KEY` | Anthropic API key for drafting |
 | `RESEND_API_KEY` | Resend API key for sending email |
 | `CUEAPI_API_KEY` | CueAPI API key (cue_sk_...) |
