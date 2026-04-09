@@ -33,7 +33,12 @@ DISCOVERY_CUE_TASK = "find-x-replies"
 COOLDOWN_CUE_TASK = "update-x-cooldown"
 
 # --- Anthropic ---
-DRAFTING_MODEL = "claude-sonnet-4-5-20250929"
+DRAFTING_MODEL = "claude-opus-4-6"
+SCORING_MODEL = "claude-haiku-4-5-20251001"
+
+# --- Relevance scoring ---
+RELEVANCE_MIN_TOTAL = 30
+MAX_CANDIDATES_TO_SCORE = 30
 
 # --- Brand accounts to exclude ---
 BRAND_EXCLUSIONS = {

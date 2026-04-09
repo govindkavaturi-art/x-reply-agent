@@ -7,8 +7,8 @@ from datetime import datetime, timedelta, timezone
 
 from agent.config import (
     BRAND_EXCLUSIONS,
-    COOLDOWN_CUE_TASK,
     DISCOVERY_CUE_TASK,
+    MAX_CANDIDATES_TO_SCORE,
     MAX_REPLY_COUNT,
     MIN_ACCOUNT_AGE_DAYS,
     MIN_GOOD_POSTS,
@@ -17,7 +17,7 @@ from agent.config import (
     TOP_N_POSTS,
 )
 from agent.cueapi import claim_cue, report_outcome
-from agent.drafter import draft_reply
+from agent.drafter import draft_reply, score_post_relevance
 from agent.emailer import send_digest, send_low_signal_email
 from agent.state import (
     add_surfaced,
@@ -29,39 +29,6 @@ from agent.state import (
     save_surfaced,
 )
 from agent.x_client import search_recent
-
-
-def _specificity_score(text: str) -> int:
-    """Score 0-10 based on how specific the post is."""
-    score = 0
-    # Numbers (dollar amounts, counts, versions)
-    if re.search(r"\d+", text):
-        score += 3
-    # Version strings
-    if re.search(r"v?\d+\.\d+", text):
-        score += 2
-    # Quoted strings (specific tool names, error messages)
-    if re.search(r'["\'][\w\s]+["\']', text):
-        score += 2
-    # Stack trace indicators
-    if re.search(r"(error|traceback|exception|failed|crash)", text, re.IGNORECASE):
-        score += 2
-    # Specific tool/file mentions
-    if re.search(r"\.(py|js|ts|yml|json|md)\b", text):
-        score += 1
-    return min(score, 10)
-
-
-def _freshness_score(created_at: str, window_hours: int) -> float:
-    """Score 0-10: newer = higher."""
-    created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-    age_hours = (datetime.now(timezone.utc) - created).total_seconds() / 3600
-    return max(0, 10 - (age_hours / window_hours) * 10)
-
-
-def _crowd_inverse_score(reply_count: int) -> int:
-    """Score 0-10: fewer replies = higher."""
-    return max(0, 10 - reply_count)
 
 
 def run():
@@ -121,9 +88,10 @@ def run():
         for tweet in tweets:
             all_posts.append(tweet)
 
-    print(f"Raw posts fetched: {len(all_posts)}")
+    posts_searched = len(all_posts)
+    print(f"Raw posts fetched: {posts_searched}")
 
-    # Step 5: Filter results
+    # Step 5: Basic filter pass
     now = datetime.now(timezone.utc)
     min_account_date = now - timedelta(days=MIN_ACCOUNT_AGE_DAYS)
     seen_ids = set()
@@ -183,19 +151,42 @@ def run():
             "author_id": author_id,
             "username": username,
             "follower_count": user.get("public_metrics", {}).get("followers_count", 0),
+            "_user_data": user,
         })
 
-    print(f"Posts after filtering: {len(filtered)}")
+    posts_after_basic_filter = len(filtered)
+    print(f"Posts after basic filter: {posts_after_basic_filter}")
 
-    # Step 6: Rank results
-    for post in filtered:
-        spec = _specificity_score(post["post_text"])
-        fresh = _freshness_score(post["created_at"], SEARCH_WINDOW_HOURS)
-        crowd = _crowd_inverse_score(post["reply_count"])
-        post["score"] = (spec * 2) + fresh + crowd
+    # Step 6: Cap candidates by freshness for LLM scoring
+    filtered.sort(
+        key=lambda p: p["created_at"],
+        reverse=True,
+    )
+    candidates = filtered[:MAX_CANDIDATES_TO_SCORE]
+    posts_scored = len(candidates)
+    print(f"Candidates to score: {posts_scored}")
 
-    filtered.sort(key=lambda p: p["score"], reverse=True)
-    top_posts = filtered[:TOP_N_POSTS]
+    # Step 7: LLM relevance scoring via Haiku
+    passed = []
+    for post in candidates:
+        result = score_post_relevance(post, post.get("_user_data", {}))
+        verdict = result.get("verdict", "REJECT")
+        total = result.get("total", 0)
+        print(
+            f"  @{post['username']}: {verdict} (score {total}/50) "
+            f"- {result.get('reason', '')}"
+        )
+        if verdict == "PASS":
+            post["relevance_score"] = total
+            post["suggested_angle"] = result.get("suggested_angle", "")
+            passed.append(post)
+
+    posts_passed = len(passed)
+    print(f"Posts passed relevance scoring: {posts_passed}")
+
+    # Step 8: Sort by relevance score, take top N
+    passed.sort(key=lambda p: p.get("relevance_score", 0), reverse=True)
+    top_posts = passed[:TOP_N_POSTS]
 
     print(f"Top posts selected: {len(top_posts)}")
 
@@ -212,26 +203,40 @@ def run():
             try:
                 report_outcome(execution_id, success=True, metadata={
                     "status": "low_signal",
-                    "posts_found": len(top_posts),
+                    "posts_searched": posts_searched,
+                    "posts_after_basic_filter": posts_after_basic_filter,
+                    "posts_scored": posts_scored,
+                    "posts_passed": posts_passed,
+                    "posts_surfaced": len(top_posts),
                     "email_message_id": email_id,
                 })
             except Exception as e:
                 print(f"CueAPI report failed: {e}")
         return
 
-    # Step 7: Draft replies
+    # Step 9: Draft replies (Opus 4.6)
+    drafts_ok = []
     for post in top_posts:
         try:
-            post["drafted_reply"] = draft_reply(post["username"], post["post_text"])
+            reply = draft_reply(post["username"], post["post_text"])
+            if reply == "SKIP":
+                print(f"Drafter returned SKIP for @{post['username']}")
+                post["drafted_reply"] = "[SKIP - no good reply found]"
+            else:
+                post["drafted_reply"] = reply
+                drafts_ok.append(post)
             print(f"Drafted reply for @{post['username']}")
         except Exception as e:
             print(f"Failed to draft reply for @{post['username']}: {e}")
             post["drafted_reply"] = "[Draft failed]"
 
-    # Step 8: Send email
+    # Use all top_posts for the email (including failed drafts)
+    email_posts = top_posts
+
+    # Step 10: Send email
     email_id = None
     try:
-        email_id = send_digest(top_posts)
+        email_id = send_digest(email_posts)
         print(f"Email sent: {email_id}")
     except Exception as e:
         print(f"Failed to send email: {e}")
@@ -239,17 +244,21 @@ def run():
             report_outcome(execution_id, success=False, error=f"Email send failed: {e}")
         sys.exit(1)
 
-    # Step 9: Update state
+    # Step 11: Update state
     new_ids = [p["post_id"] for p in top_posts]
     surfaced = add_surfaced(surfaced, new_ids)
     save_surfaced(surfaced)
     print(f"State updated. Total surfaced: {len(surfaced)}")
 
-    # Step 10: Report success to CueAPI
+    # Step 12: Report success to CueAPI
     duration_ms = int((time.time() - start_time_ms) * 1000)
     if execution_id:
         try:
             report_outcome(execution_id, success=True, metadata={
+                "posts_searched": posts_searched,
+                "posts_after_basic_filter": posts_after_basic_filter,
+                "posts_scored": posts_scored,
+                "posts_passed": posts_passed,
                 "posts_surfaced": len(top_posts),
                 "email_message_id": email_id,
                 "duration_ms": duration_ms,

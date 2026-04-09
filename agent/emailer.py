@@ -20,7 +20,8 @@ def send_digest(posts: list[dict]) -> str | None:
 
     Each post dict should have:
         username, follower_count, post_text, post_id,
-        created_at, reply_count, drafted_reply
+        created_at, reply_count, drafted_reply,
+        relevance_score (optional), suggested_angle (optional)
 
     Returns the Resend message ID, or None on failure.
     """
@@ -32,13 +33,18 @@ def send_digest(posts: list[dict]) -> str | None:
 
     for i, p in enumerate(posts, 1):
         age = _format_age(p["created_at"])
+        score = p.get("relevance_score", "?")
         lines.append(
             f'{i}. @{p["username"]} ({p["follower_count"]} followers) '
-            f'| {age} | {p["reply_count"]} replies'
+            f'| {age} | {p["reply_count"]} replies | score: {score}/50'
         )
         lines.append("")
         lines.append(f'"{p["post_text"]}"')
         lines.append("")
+        angle = p.get("suggested_angle", "")
+        if angle:
+            lines.append(f"Angle: {angle}")
+            lines.append("")
         lines.append("Suggested reply:")
         lines.append(f'"{p["drafted_reply"]}"')
         lines.append("")
