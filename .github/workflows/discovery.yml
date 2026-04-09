@@ -1,0 +1,36 @@
+name: X Reply Discovery
+
+on:
+  schedule:
+    # Every 2 hours UTC (covers 8am-10pm Pacific window and more)
+    - cron: '0 16,18,20,22,0,2,4,6 * * *'
+  workflow_dispatch:
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - run: pip install -r requirements.txt
+
+      - name: Run discovery
+        env:
+          X_API_BEARER_TOKEN: ${{ secrets.X_API_BEARER_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          CUEAPI_API_KEY: ${{ secrets.CUEAPI_API_KEY }}
+          GOVIND_X_USER_ID: ${{ secrets.GOVIND_X_USER_ID }}
+        run: python -m agent.discovery
+
+      - name: Commit state updates
+        run: |
+          git config user.name "x-reply-agent"
+          git config user.email "bot@vector.build"
+          git add data/
+          git diff --cached --quiet || git commit -m "Update state after discovery run"
+          git push
